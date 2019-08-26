@@ -359,12 +359,6 @@ if (CMAKE_BUILD_TYPE MATCHES "Coverage")
   )
 endif()
 
-if (NOT WIN32)
-  # On Linux, must explicitly link -lpthread -ldl in order for static linking
-  # to libzstd or libcurl to work.
-  target_link_libraries(TILEDB_CORE_OBJECTS_ILIB INTERFACE pthread dl)
-endif()
-
 # Required dependencies. These come last as any prior dependencies relying on
 # these must be listed first for Linux. E.g. AWSSDK and Curl depend on Zlib,
 # which is installed here.
@@ -387,6 +381,12 @@ if (NOT WIN32)
       OpenSSL::SSL
       OpenSSL::Crypto
   )
+endif()
+
+if (NOT WIN32)
+  # On Linux, must explicitly link -lpthread -ldl in order for static linking
+  # to libzstd or libcurl to work.
+  target_link_libraries(TILEDB_CORE_OBJECTS_ILIB INTERFACE pthread dl)
 endif()
 
 # Win32 specific libraries
