@@ -5,7 +5,7 @@
  *
  * The MIT License
  *
- * @copyright Copyright (c) 2017-2018 TileDB, Inc.
+ * @copyright Copyright (c) 2017-2019 TileDB, Inc.
  * @copyright Copyright (c) 2016 MIT and Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -31,11 +31,12 @@
  * This file defines serialization for the Query class
  */
 
-#include "tiledb/sm/serialization/query.h"
 #include "tiledb/sm/misc/logger.h"
 #include "tiledb/sm/misc/stats.h"
 #include "tiledb/sm/misc/utils.h"
+#include "tiledb/sm/query/query_transaction.h"
 #include "tiledb/sm/serialization/capnp_utils.h"
+#include "tiledb/sm/serialization/query.h"
 
 #ifdef TILEDB_SERIALIZATION
 #include <capnp/compat/json.h>
@@ -472,10 +473,10 @@ Status query_to_capnp(
 
 Status query_from_capnp(
     const capnp::Query::Reader& query_reader,
-    bool clientside,
+    const bool clientside,
     void* buffer_start,
-    std::unordered_map<std::string, QueryBufferCopyState>* copy_state,
-    Query* query,
+    std::unordered_map<std::string, QueryBufferCopyState>* const copy_state,
+    QueryTransaction* const query,
     bool* const user_buffers_overflowed) {
   using namespace tiledb::sm;
 
@@ -851,9 +852,26 @@ Status query_deserialize(
     bool* const user_buffers_overflowed) {
   STATS_FUNC_IN(serialization_query_deserialize);
 
+  // Create a query transaction and a return wrapper that will roll back
+  // the query state if we return a non-OK status.
+  QueryTransaction query_transaction(query);
+  const static auto return_wrapper = [&query_transaction](const Status st) {
+    const Status transaction_st =
+      st.ok() ?
+        query_transaction.commit() :
+        query_transaction.roll_back();
+
+    if (!transaction_st.ok()) {
+      LOG_STATUS(st);
+    }
+
+    return st;
+  };
+
   if (serialize_type == SerializationType::JSON)
-    return LOG_STATUS(Status::SerializationError(
-        "Cannot deserialize query; json format not supported."));
+    return return_wrapper(
+      LOG_STATUS(Status::SerializationError(
+        "Cannot deserialize query; json format not supported.")));
 
   try {
     switch (serialize_type) {
@@ -867,19 +885,21 @@ Status query_deserialize(
                 static_cast<const char*>(serialized_buffer.cur_data())),
             query_builder);
         capnp::Query::Reader query_reader = query_builder.asReader();
-        return query_from_capnp(
+        return return_wrapper(
+          query_from_capnp(
             query_reader,
             clientside,
             nullptr,
             copy_state,
-            query,
-            user_buffers_overflowed);
+            &query_transaction,
+            user_buffers_overflowed));
       }
       case SerializationType::CAPNP: {
         // Capnp FlatArrayMessageReader requires 64-bit alignment.
         if (!utils::is_aligned<sizeof(uint64_t)>(serialized_buffer.cur_data()))
-          return LOG_STATUS(Status::SerializationError(
-              "Could not deserialize query; buffer is not 8-byte aligned."));
+          return return_wrapper(
+            LOG_STATUS(Status::SerializationError(
+              "Could not deserialize query; buffer is not 8-byte aligned.")));
 
         // Set traversal limit to 10GI (TODO: make this a config option)
         ::capnp::ReaderOptions readerOptions;
@@ -898,27 +918,31 @@ Status query_deserialize(
         // was concatenated after the CapnP message on serialization).
         auto attribute_buffer_start = reader.getEnd();
         auto buffer_start = const_cast<::capnp::word*>(attribute_buffer_start);
-        return query_from_capnp(
+        return return_wrapper(
+          query_from_capnp(
             query_reader,
             clientside,
             buffer_start,
             copy_state,
-            query,
-            user_buffers_overflowed);
+            &query_transaction,
+            user_buffers_overflowed));
       }
       default:
-        return LOG_STATUS(Status::SerializationError(
-            "Cannot deserialize; unknown serialization type."));
+        return return_wrapper(
+          LOG_STATUS(Status::SerializationError(
+            "Cannot deserialize; unknown serialization type.")));
     }
   } catch (kj::Exception& e) {
-    return LOG_STATUS(Status::SerializationError(
+    return return_wrapper(
+      LOG_STATUS(Status::SerializationError(
         "Cannot deserialize; kj::Exception: " +
-        std::string(e.getDescription().cStr())));
+        std::string(e.getDescription().cStr()))));
   } catch (std::exception& e) {
-    return LOG_STATUS(Status::SerializationError(
-        "Cannot deserialize; exception: " + std::string(e.what())));
+    return return_wrapper(
+      LOG_STATUS(Status::SerializationError(
+        "Cannot deserialize; exception: " + std::string(e.what()))));
   }
-  return Status::Ok();
+  return return_wrapper(Status::Ok());
 
   STATS_FUNC_OUT(serialization_query_deserialize);
 }
