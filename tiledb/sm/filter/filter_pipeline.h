@@ -39,6 +39,7 @@
 #include "tiledb/sm/filter/filter.h"
 #include "tiledb/sm/filter/filter_buffer.h"
 #include "tiledb/sm/misc/status.h"
+#include "tiledb/sm/tile/chunk_buffers.h"
 
 #include <memory>
 #include <vector>
@@ -262,12 +263,13 @@ class FilterPipeline {
    * Run the given list of chunks forward through the pipeline.
    *
    * @param chunks Chunks to process
-   * @param output Buffer where output of last stage will be written.
+   * @param output_chunk_buffers ChunkBuffers where output of last stage
+   *  will be written.
    * @return Status
    */
   Status filter_chunks_forward(
       const std::vector<std::pair<void*, uint32_t>>& chunks,
-      Buffer* output) const;
+      ChunkBuffers* output_chunk_buffers) const;
 
   /**
    * Run the given list of chunks in reverse through the pipeline.
@@ -280,7 +282,7 @@ class FilterPipeline {
   Status filter_chunks_reverse(
       const std::vector<std::tuple<void*, uint32_t, uint32_t, uint32_t>>&
           chunks,
-      Buffer* output) const;
+      ChunkBuffers* output_chunk_buffers) const;
 };
 
 }  // namespace sm

@@ -648,12 +648,22 @@ Status Reader::compute_range_result_coords(
   assert(dim_num == range.size());
   const auto& t = tile->attr_tiles_.find(constants::coords)->second.first;
   auto coords_num = t.cell_num();
-  auto c = (T*)t.internal_data();
 
   for (uint64_t i = 0, pos = 0; i < coords_num; ++i, pos += dim_num) {
-    if (utils::geometry::coords_in_rect<T>(&c[pos], range, dim_num) &&
-        !coords_overwritten(frag_idx, &c[pos]))
-      result_coords->emplace_back(tile, &c[pos], i);
+    const uint64_t offset = pos * sizeof(T);
+    void *buffer;
+    uint32_t buffer_size;
+    RETURN_NOT_OK(t.internal_data(offset, &buffer, &buffer_size));
+
+    // We assume that each tile chunk buffer contains at least
+    // a complete set of dim_num 'T' values, otherwise
+    // 'coords_in_rect' will segfault.
+    assert(buffer_size >= (sizeof(T) * dim_num));
+
+    T *const c = static_cast<T*>(buffer);
+    if (utils::geometry::coords_in_rect<T>(c, range, dim_num) &&
+        !coords_overwritten(frag_idx, c))
+      result_coords->emplace_back(tile, c, i);
   }
 
   return Status::Ok();
@@ -1022,16 +1032,13 @@ Status Reader::copy_var_cells(
     const auto& var_offsets = var_offsets_per_cs[cs_idx];
 
     // Get tile information, if the range is nonempty.
-    uint64_t* tile_offsets = nullptr;
+    Tile* tile = nullptr;
     Tile* tile_var = nullptr;
-    uint64_t tile_cell_num = 0;
     if (cs.tile_ != nullptr) {
       std::pair<tiledb::sm::Tile, tiledb::sm::Tile>* const tile_pair =
           &cs.tile_->attr_tiles_.find(attribute)->second;
-      Tile* const tile = &tile_pair->first;
+      tile = &tile_pair->first;
       tile_var = &tile_pair->second;
-      tile_offsets = (uint64_t*)tile->internal_data();
-      tile_cell_num = tile->cell_num();
     }
 
     // Copy each cell in the range
@@ -1050,12 +1057,33 @@ Status Reader::copy_var_cells(
       if (cs.tile_ == nullptr) {
         std::memcpy(var_dest, &fill_value, fill_size);
       } else {
+        void *buffer;
+        uint32_t buffer_size;
+
+        RETURN_NOT_OK(tile->internal_data(
+          (cell_idx * sizeof(uint64_t)), &buffer, &buffer_size));
+        assert(*buffer_size >= sizeof(uint64_t));
+        const uint64_t tile_offset_cell_idx =
+          *static_cast<uint64_t*>(buffer);
+
+        RETURN_NOT_OK(tile->internal_data(
+          (cell_idx + 1 * sizeof(uint64_t)), &buffer, &buffer_size));
+        assert(*buffer_size >= sizeof(uint64_t));
+        const uint64_t tile_offset_cell_idx_inc =
+          *static_cast<uint64_t*>(buffer);
+
+        RETURN_NOT_OK(tile->internal_data(
+          0, &buffer, &buffer_size));
+        assert(*buffer_size >= sizeof(uint64_t));
+        const uint64_t tile_offset_0 =
+          *static_cast<uint64_t*>(buffer);
+
         const uint64_t cell_var_size =
-            (cell_idx != tile_cell_num - 1) ?
-                tile_offsets[cell_idx + 1] - tile_offsets[cell_idx] :
-                tile_var->size() - (tile_offsets[cell_idx] - tile_offsets[0]);
+            (cell_idx != tile->cell_num() - 1) ?
+                tile_offset_cell_idx_inc - tile_offset_cell_idx :
+                tile_var->size() - (tile_offset_cell_idx - tile_offset_0);
         const uint64_t tile_var_offset =
-            tile_offsets[cell_idx] - tile_offsets[0];
+            tile_offset_cell_idx - tile_offset_0;
         RETURN_NOT_OK(tile_var->read(var_dest, cell_var_size, tile_var_offset));
       }
     }

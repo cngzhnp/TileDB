@@ -955,12 +955,13 @@ Status FragmentMetadata::load_tile_var_sizes(
 // ===== FORMAT =====
 //  bounding_coords_num (uint64_t)
 //  bounding_coords_#1 (void*) bounding_coords_#2 (void*) ...
-Status FragmentMetadata::load_bounding_coords(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_bounding_coords(T* reader) {
   uint64_t bounding_coords_size = 2 * array_schema_->coords_size();
 
   // Get number of bounding coordinates
   uint64_t bounding_coords_num = 0;
-  Status st = buff->read(&bounding_coords_num, sizeof(uint64_t));
+  Status st = reader->read(&bounding_coords_num, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading number of "
@@ -971,7 +972,7 @@ Status FragmentMetadata::load_bounding_coords(ConstBuffer* buff) {
   bounding_coords_.resize(bounding_coords_num);
   for (uint64_t i = 0; i < bounding_coords_num; ++i) {
     bounding_coords = std::malloc(bounding_coords_size);
-    st = buff->read(bounding_coords, bounding_coords_size);
+    st = reader->read(bounding_coords, bounding_coords_size);
     if (!st.ok()) {
       std::free(bounding_coords);
       return LOG_STATUS(
@@ -987,11 +988,12 @@ Status FragmentMetadata::load_bounding_coords(ConstBuffer* buff) {
 // file_sizes_attr#0 (uint64_t)
 // ...
 // file_sizes_attr#attribute_num (uint64_t)
-Status FragmentMetadata::load_file_sizes(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_file_sizes(T* reader) {
   unsigned int attribute_num = array_schema_->attribute_num();
   file_sizes_.resize(attribute_num + 1);
   Status st =
-      buff->read(&file_sizes_[0], (attribute_num + 1) * sizeof(uint64_t));
+      reader->read(&file_sizes_[0], (attribute_num + 1) * sizeof(uint64_t));
 
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
@@ -1005,10 +1007,11 @@ Status FragmentMetadata::load_file_sizes(ConstBuffer* buff) {
 // file_sizes_attr#0 (uint64_t)
 // ...
 // file_sizes_attr#attribute_num (uint64_t)
-Status FragmentMetadata::load_file_var_sizes(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_file_var_sizes(T* reader) {
   unsigned int attribute_num = array_schema_->attribute_num();
   file_var_sizes_.resize(attribute_num);
-  Status st = buff->read(&file_var_sizes_[0], attribute_num * sizeof(uint64_t));
+  Status st = reader->read(&file_var_sizes_[0], attribute_num * sizeof(uint64_t));
 
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
@@ -1020,9 +1023,10 @@ Status FragmentMetadata::load_file_var_sizes(ConstBuffer* buff) {
 
 // ===== FORMAT =====
 // last_tile_cell_num (uint64_t)
-Status FragmentMetadata::load_last_tile_cell_num(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_last_tile_cell_num(T* reader) {
   // Get last tile cell number
-  Status st = buff->read(&last_tile_cell_num_, sizeof(uint64_t));
+  Status st = reader->read(&last_tile_cell_num_, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading last tile cell number "
@@ -1036,10 +1040,11 @@ Status FragmentMetadata::load_last_tile_cell_num(ConstBuffer* buff) {
 // mbr_#1 (void*)
 // mbr_#2 (void*)
 // ...
-Status FragmentMetadata::load_mbrs(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_mbrs(T* reader) {
   // Get number of MBRs
   uint64_t mbr_num = 0;
-  Status st = buff->read(&mbr_num, sizeof(uint64_t));
+  Status st = reader->read(&mbr_num, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading number of MBRs failed"));
@@ -1051,7 +1056,7 @@ Status FragmentMetadata::load_mbrs(ConstBuffer* buff) {
   mbrs_.resize(mbr_num);
   for (uint64_t i = 0; i < mbr_num; ++i) {
     mbr = std::malloc(mbr_size);
-    st = buff->read(mbr, mbr_size);
+    st = reader->read(mbr, mbr_size);
     if (!st.ok()) {
       std::free(mbr);
       return LOG_STATUS(Status::FragmentMetadataError(
@@ -1065,19 +1070,21 @@ Status FragmentMetadata::load_mbrs(ConstBuffer* buff) {
   return Status::Ok();
 }
 
-Status FragmentMetadata::load_non_empty_domain(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_non_empty_domain(T* reader) {
   if (version_ <= 2)
-    return load_non_empty_domain_v2(buff);
-  return load_non_empty_domain_v3(buff);
+    return load_non_empty_domain_v2(reader);
+  return load_non_empty_domain_v3(reader);
 }
 
 // ===== FORMAT =====
 // non_empty_domain_size (uint64_t)
 // non_empty_domain (void*)
-Status FragmentMetadata::load_non_empty_domain_v2(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_non_empty_domain_v2(T* reader) {
   // Get domain size
   uint64_t domain_size = 0;
-  Status st = buff->read(&domain_size, sizeof(uint64_t));
+  Status st = reader->read(&domain_size, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading domain size failed"));
@@ -1088,7 +1095,7 @@ Status FragmentMetadata::load_non_empty_domain_v2(ConstBuffer* buff) {
     non_empty_domain_ = nullptr;
   } else {
     non_empty_domain_ = std::malloc(domain_size);
-    st = buff->read(non_empty_domain_, domain_size);
+    st = reader->read(non_empty_domain_, domain_size);
     if (!st.ok()) {
       std::free(non_empty_domain_);
       return LOG_STATUS(Status::FragmentMetadataError(
@@ -1111,10 +1118,11 @@ Status FragmentMetadata::load_non_empty_domain_v2(ConstBuffer* buff) {
 // ===== FORMAT =====
 // null non_empty_domain (char)
 // non_empty_domain (domain_size)
-Status FragmentMetadata::load_non_empty_domain_v3(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_non_empty_domain_v3(T* reader) {
   // Get null non-empty domain
   bool null_non_empty_domain = false;
-  Status st = buff->read(&null_non_empty_domain, sizeof(char));
+  Status st = reader->read(&null_non_empty_domain, sizeof(char));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading domain size failed"));
@@ -1123,7 +1131,7 @@ Status FragmentMetadata::load_non_empty_domain_v3(ConstBuffer* buff) {
   // Get non-empty domain
   auto domain_size = 2 * array_schema_->coords_size();
   non_empty_domain_ = std::malloc(domain_size);
-  st = buff->read(non_empty_domain_, domain_size);
+  st = reader->read(non_empty_domain_, domain_size);
   if (!st.ok()) {
     std::free(non_empty_domain_);
     return LOG_STATUS(Status::FragmentMetadataError(
@@ -1146,7 +1154,8 @@ Status FragmentMetadata::load_non_empty_domain_v3(ConstBuffer* buff) {
   return Status::Ok();
 }
 
-Status FragmentMetadata::load_tile_offsets(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_tile_offsets(T* reader) {
   Status st;
   uint64_t tile_offsets_num = 0;
   unsigned int attribute_num = array_schema_->attribute_num();
@@ -1157,7 +1166,7 @@ Status FragmentMetadata::load_tile_offsets(ConstBuffer* buff) {
   // For all attributes, get the tile offsets
   for (unsigned int i = 0; i < attribute_num + 1; ++i) {
     // Get number of tile offsets
-    st = buff->read(&tile_offsets_num, sizeof(uint64_t));
+    st = reader->read(&tile_offsets_num, sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
           "Cannot load fragment metadata; Reading number of tile offsets "
@@ -1169,7 +1178,7 @@ Status FragmentMetadata::load_tile_offsets(ConstBuffer* buff) {
 
     // Get tile offsets
     tile_offsets_[i].resize(tile_offsets_num);
-    st = buff->read(&tile_offsets_[i][0], tile_offsets_num * sizeof(uint64_t));
+    st = reader->read(&tile_offsets_[i][0], tile_offsets_num * sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
           "Cannot load fragment metadata; Reading tile offsets failed"));
@@ -1182,13 +1191,14 @@ Status FragmentMetadata::load_tile_offsets(ConstBuffer* buff) {
   return Status::Ok();
 }
 
+template <class T>
 Status FragmentMetadata::load_tile_offsets(
-    unsigned attr_id, ConstBuffer* buff) {
+    unsigned attr_id, T* reader) {
   Status st;
   uint64_t tile_offsets_num = 0;
 
   // Get number of tile offsets
-  st = buff->read(&tile_offsets_num, sizeof(uint64_t));
+  st = reader->read(&tile_offsets_num, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading number of tile offsets "
@@ -1198,7 +1208,7 @@ Status FragmentMetadata::load_tile_offsets(
   // Get tile offsets
   if (tile_offsets_num != 0) {
     tile_offsets_[attr_id].resize(tile_offsets_num);
-    st = buff->read(
+    st = reader->read(
         &tile_offsets_[attr_id][0], tile_offsets_num * sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
@@ -1217,7 +1227,8 @@ Status FragmentMetadata::load_tile_offsets(
 // tile_var_offsets_attr#<attribute_num-1>_num(uint64_t)
 // tile_var_offsets_attr#<attribute_num-1>_#1 (uint64_t)
 //     tile_ver_offsets_attr#<attribute_num-1>_#2 (uint64_t) ...
-Status FragmentMetadata::load_tile_var_offsets(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_tile_var_offsets(T* reader) {
   Status st;
   unsigned int attribute_num = array_schema_->attribute_num();
   uint64_t tile_var_offsets_num = 0;
@@ -1228,7 +1239,7 @@ Status FragmentMetadata::load_tile_var_offsets(ConstBuffer* buff) {
   // For all attributes, get the variable tile offsets
   for (unsigned int i = 0; i < attribute_num; ++i) {
     // Get number of tile offsets
-    st = buff->read(&tile_var_offsets_num, sizeof(uint64_t));
+    st = reader->read(&tile_var_offsets_num, sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
           "Cannot load fragment metadata; Reading number of variable tile "
@@ -1240,7 +1251,7 @@ Status FragmentMetadata::load_tile_var_offsets(ConstBuffer* buff) {
 
     // Get variable tile offsets
     tile_var_offsets_[i].resize(tile_var_offsets_num);
-    st = buff->read(
+    st = reader->read(
         &tile_var_offsets_[i][0], tile_var_offsets_num * sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
@@ -1255,13 +1266,14 @@ Status FragmentMetadata::load_tile_var_offsets(ConstBuffer* buff) {
   return Status::Ok();
 }
 
+template <class T>
 Status FragmentMetadata::load_tile_var_offsets(
-    unsigned attr_id, ConstBuffer* buff) {
+    unsigned attr_id, T* reader) {
   Status st;
   uint64_t tile_var_offsets_num = 0;
 
   // Get number of tile offsets
-  st = buff->read(&tile_var_offsets_num, sizeof(uint64_t));
+  st = reader->read(&tile_var_offsets_num, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading number of variable tile "
@@ -1271,7 +1283,7 @@ Status FragmentMetadata::load_tile_var_offsets(
   // Get variable tile offsets
   if (tile_var_offsets_num != 0) {
     tile_var_offsets_[attr_id].resize(tile_var_offsets_num);
-    st = buff->read(
+    st = reader->read(
         &tile_var_offsets_[attr_id][0],
         tile_var_offsets_num * sizeof(uint64_t));
     if (!st.ok()) {
@@ -1291,7 +1303,8 @@ Status FragmentMetadata::load_tile_var_offsets(
 // tile_var_sizes_attr#<attribute_num-1>_num(uint64_t)
 // tile_var_sizes__attr#<attribute_num-1>_#1 (uint64_t)
 //     tile_var_sizes_attr#<attribute_num-1>_#2 (uint64_t) ...
-Status FragmentMetadata::load_tile_var_sizes(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_tile_var_sizes(T* reader) {
   Status st;
   unsigned int attribute_num = array_schema_->attribute_num();
   uint64_t tile_var_sizes_num = 0;
@@ -1302,7 +1315,7 @@ Status FragmentMetadata::load_tile_var_sizes(ConstBuffer* buff) {
   // For all attributes, get the variable tile sizes
   for (unsigned int i = 0; i < attribute_num; ++i) {
     // Get number of tile sizes
-    st = buff->read(&tile_var_sizes_num, sizeof(uint64_t));
+    st = reader->read(&tile_var_sizes_num, sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
           "Cannot load fragment metadata; Reading number of variable tile "
@@ -1314,7 +1327,7 @@ Status FragmentMetadata::load_tile_var_sizes(ConstBuffer* buff) {
 
     // Get variable tile sizes
     tile_var_sizes_[i].resize(tile_var_sizes_num);
-    st = buff->read(
+    st = reader->read(
         &tile_var_sizes_[i][0], tile_var_sizes_num * sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
@@ -1328,13 +1341,14 @@ Status FragmentMetadata::load_tile_var_sizes(ConstBuffer* buff) {
   return Status::Ok();
 }
 
+template <class T>
 Status FragmentMetadata::load_tile_var_sizes(
-    unsigned attr_id, ConstBuffer* buff) {
+    unsigned attr_id, T* reader) {
   Status st;
   uint64_t tile_var_sizes_num = 0;
 
   // Get number of tile sizes
-  st = buff->read(&tile_var_sizes_num, sizeof(uint64_t));
+  st = reader->read(&tile_var_sizes_num, sizeof(uint64_t));
   if (!st.ok()) {
     return LOG_STATUS(Status::FragmentMetadataError(
         "Cannot load fragment metadata; Reading number of variable tile "
@@ -1344,7 +1358,7 @@ Status FragmentMetadata::load_tile_var_sizes(
   // Get variable tile sizes
   if (tile_var_sizes_num != 0) {
     tile_var_sizes_[attr_id].resize(tile_var_sizes_num);
-    st = buff->read(
+    st = reader->read(
         &tile_var_sizes_[attr_id][0], tile_var_sizes_num * sizeof(uint64_t));
     if (!st.ok()) {
       return LOG_STATUS(Status::FragmentMetadataError(
@@ -1356,18 +1370,21 @@ Status FragmentMetadata::load_tile_var_sizes(
   return Status::Ok();
 }
 
-Status FragmentMetadata::load_version(ConstBuffer* buff) {
-  RETURN_NOT_OK(buff->read(&version_, sizeof(uint32_t)));
+template <class T>
+Status FragmentMetadata::load_version(T* const reader) {
+  RETURN_NOT_OK(reader->read(&version_, sizeof(uint32_t)));
   return Status::Ok();
 }
 
-Status FragmentMetadata::load_dense(ConstBuffer* buff) {
-  RETURN_NOT_OK(buff->read(&dense_, sizeof(char)));
+template <class T>
+Status FragmentMetadata::load_dense(T* reader) {
+  RETURN_NOT_OK(reader->read(&dense_, sizeof(char)));
   return Status::Ok();
 }
 
-Status FragmentMetadata::load_sparse_tile_num(ConstBuffer* buff) {
-  RETURN_NOT_OK(buff->read(&sparse_tile_num_, sizeof(uint64_t)));
+template <class T>
+Status FragmentMetadata::load_sparse_tile_num(T* reader) {
+  RETURN_NOT_OK(reader->read(&sparse_tile_num_, sizeof(uint64_t)));
   return Status::Ok();
 }
 
@@ -1394,29 +1411,30 @@ Status FragmentMetadata::get_generic_tile_size(
   return Status::Ok();
 }
 
-Status FragmentMetadata::load_generic_tile_offsets(ConstBuffer* buff) {
+template <class T>
+Status FragmentMetadata::load_generic_tile_offsets(T* reader) {
   // Load R-Tree offset
-  RETURN_NOT_OK(buff->read(&gt_offsets_.rtree_, sizeof(uint64_t)));
+  RETURN_NOT_OK(reader->read(&gt_offsets_.rtree_, sizeof(uint64_t)));
 
   // Load offsets for tile offsets
   unsigned int attribute_num = array_schema_->attribute_num();
   gt_offsets_.tile_offsets_.resize(attribute_num + 1);
   for (unsigned i = 0; i < attribute_num + 1; ++i) {
-    RETURN_NOT_OK(buff->read(&gt_offsets_.tile_offsets_[i], sizeof(uint64_t)));
+    RETURN_NOT_OK(reader->read(&gt_offsets_.tile_offsets_[i], sizeof(uint64_t)));
   }
 
   // Load offsets for tile var offsets
   gt_offsets_.tile_var_offsets_.resize(attribute_num);
   for (unsigned i = 0; i < attribute_num; ++i) {
     RETURN_NOT_OK(
-        buff->read(&gt_offsets_.tile_var_offsets_[i], sizeof(uint64_t)));
+        reader->read(&gt_offsets_.tile_var_offsets_[i], sizeof(uint64_t)));
   }
 
   // Load offsets for tile var sizes
   gt_offsets_.tile_var_sizes_.resize(attribute_num);
   for (unsigned i = 0; i < attribute_num; ++i) {
     RETURN_NOT_OK(
-        buff->read(&gt_offsets_.tile_var_sizes_[i], sizeof(uint64_t)));
+        reader->read(&gt_offsets_.tile_var_sizes_[i], sizeof(uint64_t)));
   }
 
   return Status::Ok();
@@ -1428,28 +1446,24 @@ Status FragmentMetadata::load_v2(const EncryptionKey& encryption_key) {
 
   // Read metadata
   TileIO tile_io(storage_manager_, fragment_metadata_uri);
-  auto tile = (Tile*)nullptr;
-  RETURN_NOT_OK(tile_io.read_generic(&tile, 0, encryption_key));
-  tile->disown_buff();
-  auto buff = tile->buffer();
+  Tile *tile_ptr = nullptr;
+  RETURN_NOT_OK(tile_io.read_generic(&tile_ptr, 0, encryption_key));
   STATS_COUNTER_ADD(fragment_metadata_bytes_read, tile_io.file_size());
-  delete tile;
 
   // Deserialize
-  ConstBuffer cbuff(buff);
-  RETURN_NOT_OK(load_version(&cbuff));
-  RETURN_NOT_OK(load_non_empty_domain(&cbuff));
-  RETURN_NOT_OK(load_mbrs(&cbuff));
-  RETURN_NOT_OK(load_bounding_coords(&cbuff));
-  RETURN_NOT_OK(load_tile_offsets(&cbuff));
-  RETURN_NOT_OK(load_tile_var_offsets(&cbuff));
-  RETURN_NOT_OK(load_tile_var_sizes(&cbuff));
-  RETURN_NOT_OK(load_last_tile_cell_num(&cbuff));
-  RETURN_NOT_OK(load_file_sizes(&cbuff));
-  RETURN_NOT_OK(load_file_var_sizes(&cbuff));
+  std::unique_ptr<Tile> tile(tile_ptr);
+  tile->reset_offset();
+  RETURN_NOT_OK(load_version<Tile>(tile.get()));
+  RETURN_NOT_OK(load_non_empty_domain<Tile>(tile.get()));
+  RETURN_NOT_OK(load_mbrs<Tile>(tile.get()));
+  RETURN_NOT_OK(load_bounding_coords<Tile>(tile.get()));
+  RETURN_NOT_OK(load_tile_offsets<Tile>(tile.get()));
+  RETURN_NOT_OK(load_tile_var_offsets<Tile>(tile.get()));
+  RETURN_NOT_OK(load_tile_var_sizes<Tile>(tile.get()));
+  RETURN_NOT_OK(load_last_tile_cell_num<Tile>(tile.get()));
+  RETURN_NOT_OK(load_file_sizes<Tile>(tile.get()));
+  RETURN_NOT_OK(load_file_var_sizes<Tile>(tile.get()));
   RETURN_NOT_OK(create_rtree());
-
-  delete buff;
 
   return Status::Ok();
 }
@@ -1471,13 +1485,13 @@ Status FragmentMetadata::load_footer(const EncryptionKey& encryption_key) {
   RETURN_NOT_OK(read_file_footer(&buff));
 
   ConstBuffer cbuff(&buff);
-  RETURN_NOT_OK(load_version(&cbuff));
-  RETURN_NOT_OK(load_dense(&cbuff));
-  RETURN_NOT_OK(load_non_empty_domain(&cbuff));
-  RETURN_NOT_OK(load_sparse_tile_num(&cbuff));
-  RETURN_NOT_OK(load_last_tile_cell_num(&cbuff));
-  RETURN_NOT_OK(load_file_sizes(&cbuff));
-  RETURN_NOT_OK(load_file_var_sizes(&cbuff));
+  RETURN_NOT_OK(load_version<ConstBuffer>(&cbuff));
+  RETURN_NOT_OK(load_dense<ConstBuffer>(&cbuff));
+  RETURN_NOT_OK(load_non_empty_domain<ConstBuffer>(&cbuff));
+  RETURN_NOT_OK(load_sparse_tile_num<ConstBuffer>(&cbuff));
+  RETURN_NOT_OK(load_last_tile_cell_num<ConstBuffer>(&cbuff));
+  RETURN_NOT_OK(load_file_sizes<ConstBuffer>(&cbuff));
+  RETURN_NOT_OK(load_file_var_sizes<ConstBuffer>(&cbuff));
 
   tile_offsets_.resize(array_schema_->attribute_num() + 1);
   tile_var_offsets_.resize(array_schema_->attribute_num());
@@ -1685,10 +1699,12 @@ Status FragmentMetadata::read_generic_tile_from_file(
 
   // Read metadata
   TileIO tile_io(storage_manager_, fragment_metadata_uri);
-  auto tile = (Tile*)nullptr;
-  RETURN_NOT_OK(tile_io.read_generic(&tile, offset, encryption_key));
-  tile->buffer()->swap(*buff);
-  delete tile;
+  Tile *tile_ptr = nullptr;
+  RETURN_NOT_OK(tile_io.read_generic(&tile_ptr, offset, encryption_key));
+  std::unique_ptr<Tile> tile(tile_ptr);
+
+  buff->realloc(tile->size());
+  tile->read(buff->data(), buff->alloced_size());
 
   return Status::Ok();
 }
@@ -1717,6 +1733,7 @@ Status FragmentMetadata::write_generic_tile_to_file(
       0,
       buff,
       false);
+  // TODO: tile chunks must contain buffer.
   TileIO tile_io(storage_manager_, fragment_metadata_uri);
   RETURN_NOT_OK(tile_io.write_generic(&tile, encryption_key, nbytes));
 

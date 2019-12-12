@@ -200,10 +200,10 @@ Status TileIO::write_generic(
 
   // Filter tile
   RETURN_NOT_OK(header.filters.run_forward(tile));
-  header.persisted_size = tile->buffer()->size();
+  header.persisted_size = tile->size();
 
   RETURN_NOT_OK(write_generic_tile_header(&header));
-  RETURN_NOT_OK(storage_manager_->write(uri_, tile->buffer()));
+  RETURN_NOT_OK(storage_manager_->write(uri_, tile->contigious_buffer()));
 
   file_size_ = header.persisted_size;
   STATS_COUNTER_ADD(tileio_write_num_bytes_written, header.persisted_size);

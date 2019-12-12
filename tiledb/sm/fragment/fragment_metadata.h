@@ -626,108 +626,126 @@ class FragmentMetadata {
       const EncryptionKey& encryption_key, unsigned attr_id);
 
   /** Loads the generic tile offsets from the buffer. */
-  Status load_generic_tile_offsets(ConstBuffer* buff);
+  template <class T>
+  Status load_generic_tile_offsets(T* reader);
 
   /**
    * Loads the bounding coordinates from the fragment metadata buffer.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_bounding_coords(ConstBuffer* buff);
+  template <class T>
+  Status load_bounding_coords(T* reader);
 
   /** Loads the sizes of each attribute file from the buffer. */
-  Status load_file_sizes(ConstBuffer* buff);
+  template <class T>
+  Status load_file_sizes(T* reader);
 
   /** Loads the sizes of each variable attribute file from the buffer. */
-  Status load_file_var_sizes(ConstBuffer* buff);
+  template <class T>
+  Status load_file_var_sizes(T* reader);
 
   /**
    * Loads the cell number of the last tile from the fragment metadata buffer.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_last_tile_cell_num(ConstBuffer* buff);
+  template <class T>
+  Status load_last_tile_cell_num(T* reader);
 
   /**
    * Loads the MBRs from the fragment metadata buffer.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_mbrs(ConstBuffer* buff);
+  template <class T>
+  Status load_mbrs(T* reader);
 
   /**
    * Loads the non-empty domain from the fragment metadata buffer.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_non_empty_domain(ConstBuffer* buff);
+  template <class T>
+  Status load_non_empty_domain(T* reader);
 
   /**
    * Loads the non-empty domain from the fragment metadata buffer,
    * for format versions <= 2.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_non_empty_domain_v2(ConstBuffer* buff);
+  template <class T>
+  Status load_non_empty_domain_v2(T* reader);
 
   /**
    * Loads the non-empty domain from the fragment metadata buffer,
    * for format versions >= 3.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_non_empty_domain_v3(ConstBuffer* buff);
+  template <class T>
+  Status load_non_empty_domain_v3(T* reader);
 
   /**
    * Loads the tile offsets for the input attribute from the input buffer.
    */
-  Status load_tile_offsets(ConstBuffer* buff);
+  template <class T>
+  Status load_tile_offsets(T* reader);
 
   /**
    * Loads the tile offsets for the input attribute from the input buffer.
    */
-  Status load_tile_offsets(unsigned attr_id, ConstBuffer* buff);
+  template <class T>
+  Status load_tile_offsets(unsigned attr_id, T* reader);
 
   /**
    * Loads the variable tile offsets from the fragment metadata buffer.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_tile_var_offsets(ConstBuffer* buff);
+  template <class T>
+  Status load_tile_var_offsets(T* reader);
 
   /**
    * Loads the variable tile offsets for the input attribute from the buffer.
    */
-  Status load_tile_var_offsets(unsigned attr_id, ConstBuffer* buff);
+  template <class T>
+  Status load_tile_var_offsets(unsigned attr_id, T* reader);
 
   /**
    * Loads the variable tile sizes from the fragment metadata.
    *
-   * @param buff Metadata buffer.
+   * @param reader TODO.
    * @return Status
    */
-  Status load_tile_var_sizes(ConstBuffer* buff);
+  template <class T>
+  Status load_tile_var_sizes(T* reader);
 
   /**
    * Loads the variable tile sizes for the input attribute from the buffer.
    */
-  Status load_tile_var_sizes(unsigned attr_id, ConstBuffer* buff);
+  template <class T>
+  Status load_tile_var_sizes(unsigned attr_id, T* reader);
 
-  /** Loads the format version from the buffer. */
-  Status load_version(ConstBuffer* buff);
+  /** Loads the format version from T::read(). */
+  template <class T>
+  Status load_version(T* buff);
 
   /** Loads the `dense_` field from the buffer. */
-  Status load_dense(ConstBuffer* buff);
+  template <class T>
+  Status load_dense(T* reader);
 
   /** Loads the number of sparse tiles from the buffer. */
-  Status load_sparse_tile_num(ConstBuffer* buff);
+  template <class T>
+  Status load_sparse_tile_num(T* reader);
 
   /**
    * Retrieves the size of the generic tile starting at the input offset.

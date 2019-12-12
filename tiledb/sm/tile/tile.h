@@ -37,6 +37,7 @@
 #include "tiledb/sm/buffer/buffer.h"
 #include "tiledb/sm/buffer/const_buffer.h"
 #include "tiledb/sm/misc/status.h"
+#include "tiledb/sm/tile/chunk_buffers.h"
 
 #include <cinttypes>
 
@@ -152,8 +153,8 @@ class Tile {
   /** Advances the buffer offset. */
   void advance_offset(uint64_t nbytes);
 
-  /** Returns the internal buffer. */
-  Buffer* buffer() const;
+  /** Returns the internal chunk buffers. */
+  ChunkBuffers* chunk_buffers();
 
   /** Returns the cell size. */
   uint64_t cell_size() const;
@@ -168,11 +169,19 @@ class Tile {
    */
   Tile clone(bool deep_copy) const;
 
-  /** Returns the internal tile data. */
-  void* internal_data() const;
+  /** 
+   * Returns the internal tile data at the given logical offset.
+   * The returned 'length' is guaranteed to be >= 1 and <=
+   * (this->size() - 'offset'). You may need to call this multiple
+   * times to fetch your data if it spans multiple internal chunks.
+   */
+  Status internal_data(
+    uint64_t offset,
+    void** buffer,
+    uint32_t *buffer_size) const;
 
   /**
-   * Sets `owns_buff_` to `false` and thus will not destroy the buffer
+   * Sets `owns_chunk_buffers_` to `false` and thus will not destroy the buffer
    * in the destructor.
    */
   void disown_buff();
@@ -213,7 +222,13 @@ class Tile {
   uint64_t pre_filtered_size() const;
 
   /** Reallocates nbytes for the internal tile buffer. */
+#if 0
   Status realloc(uint64_t nbytes);
+#endif
+
+#if 0
+  Status realloc_chunks(uint64_t nchunks);
+#endif
 
   /** Reads from the tile into the input buffer *nbytes*. */
   Status read(void* buffer, uint64_t nbytes);
@@ -232,7 +247,9 @@ class Tile {
   void reset_offset();
 
   /** Resets the tile size. */
+#if 0
   void reset_size();
+#endif
 
   /** Set the filtered state of the tile. */
   void set_filtered(bool filtered);
@@ -244,7 +261,9 @@ class Tile {
   void set_pre_filtered_size(uint64_t pre_filtered_size);
 
   /** Sets the internal buffer size. */
+#if 0
   void set_size(uint64_t size);
+#endif
 
   /** Returns the tile size. */
   uint64_t size() const;
@@ -261,6 +280,7 @@ class Tile {
   /** Returns the tile data type. */
   Datatype type() const;
 
+#if 0
   /** Returns the value of type T in the tile at the input offset. */
   template <class T>
   inline T value(uint64_t offset) const {
@@ -272,6 +292,7 @@ class Tile {
   inline T value() const {
     return buffer_->value<T>();
   }
+#endif
 
   /** Writes as much data as possibly can be read from the input buffer. */
   Status write(ConstBuffer* buf);
@@ -288,6 +309,7 @@ class Tile {
   /** Writes the entire internal buffer of 'rhs' into the tile. */
   Status write(const Tile& rhs);
 
+#if 0
   /**
    * Writes as much data as possibly can be read from the input buffer.
    * Note that this is a special function where each read value (of type
@@ -295,6 +317,7 @@ class Tile {
    * the tile local buffer.
    */
   Status write_with_shift(ConstBuffer* buf, uint64_t offset);
+#endif
 
   /**
    * Zips the coordinate values such that a cell's coordinates across
@@ -308,7 +331,15 @@ class Tile {
   /* ********************************* */
 
   /** Local buffer that stores the tile data. */
+#if 0
   Buffer* buffer_ = nullptr;
+#endif
+
+  /** TODO */
+  ChunkBuffers chunk_buffers_;
+
+  /** TODO */
+  uint64_t offset_;
 
   /** The cell size. */
   uint64_t cell_size_;
@@ -326,10 +357,10 @@ class Tile {
   uint32_t format_version_;
 
   /**
-   * If *true* the tile object will delete *buff* upon
+   * If *true* the tile object will free *chunk_buffers_* upon
    * destruction, otherwise it will not delete it.
    */
-  bool owns_buff_;
+  bool owns_chunk_buffers_;
 
   /** The size in bytes of the tile data before it has been filtered. */
   uint64_t pre_filtered_size_;

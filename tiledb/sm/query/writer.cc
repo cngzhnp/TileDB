@@ -949,7 +949,14 @@ Status Writer::compute_coords_metadata(
     for (unsigned d = 0; d < dim_num; ++d) {
       const auto& dim_name = array_schema_->dimension(d)->name();
       auto tiles_it = tiles.find(dim_name);
-      data[d] = (T*)(tiles_it->second[t].internal_data());
+      const auto& tile = tiles_it->second[t];
+
+      void *buffer;
+      uint32_t buffer_size;
+      RETURN_NOT_OK(tile.internal_data(0, &buffer, &buffer_size));
+      assert(buffer_size >= sizeof(T) * dim_num);
+
+      data[d] = static_cast<T*>(buffer);
     }
 
     // Initialize MBR with the first coords
