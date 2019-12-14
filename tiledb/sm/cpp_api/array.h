@@ -473,6 +473,7 @@ class Array {
       const void* encryption_key,
       uint32_t key_length,
       uint64_t timestamp) {
+    std::cerr << "JOE CPP OPEN ARRAY" << std::endl;
     auto& ctx = ctx_.get();
     tiledb_ctx_t* c_ctx = ctx.ptr().get();
     ctx.handle_error(tiledb_array_open_at_with_key(

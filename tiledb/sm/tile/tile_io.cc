@@ -114,26 +114,79 @@ Status TileIO::read_generic(
 
   RETURN_NOT_OK(configure_encryption_filter(&header, encryption_key));
 
-  *tile = new Tile();
-  RETURN_NOT_OK_ELSE(
-      (*tile)->init(
-          header.version_number,
-          (Datatype)header.datatype,
-          header.cell_size,
-          0),
-      delete *tile);
-
   auto tile_data_offset =
       GenericTileHeader::BASE_SIZE + header.filter_pipeline_size;
 
-  // Read the tile.
-  RETURN_NOT_OK_ELSE(
+  // Read the number of chunks.
+  uint64_t nchunks;
+  RETURN_NOT_OK(
       storage_manager_->read(
           uri_,
           file_offset + tile_data_offset,
-          (*tile)->buffer(),
-          header.persisted_size),
-      delete *tile);
+          &nchunks,
+          sizeof(uint64_t)));
+  tile_data_offset += sizeof(uint64_t);
+
+  std::cerr << "JOE nchunks " << nchunks << std::endl;
+
+  // TODO: the following logic depends on the most up to date file format,
+  // should we refactor this into a routine that respects the file version?
+
+  // Read all filtered chunks into a single buffer.
+  Buffer buffer;
+  RETURN_NOT_OK(
+      storage_manager_->read(
+          uri_,
+          file_offset + tile_data_offset,
+          &buffer,
+          header.persisted_size));
+
+  std::cerr << "JOE buffer.size() " << buffer.size() << std::endl;
+
+  std::cerr << "JOE header.persisted_size " << header.persisted_size << std::endl;
+
+  // Build a vector of the variable chunk sizes.
+  std::vector<uint32_t> var_chunk_sizes;
+  var_chunk_sizes.reserve(nchunks);
+  for (uint32_t i = 0; i < nchunks; ++i) {
+
+    buffer.advance_offset(sizeof(uint32_t));
+    const uint32_t filtered_chunk_length = buffer.value<uint32_t>();
+    buffer.advance_offset(sizeof(uint32_t));
+    const uint32_t metadata_length = buffer.value<uint32_t>();
+    buffer.advance_offset(sizeof(uint32_t));
+
+    var_chunk_sizes.emplace_back(
+      filtered_chunk_length + metadata_length + (3 * sizeof(uint32_t)));
+
+    buffer.advance_offset(filtered_chunk_length + metadata_length);
+  }
+
+  std::cerr << "JOE var_chunk_sizes[0] " << var_chunk_sizes[0] << std::endl;
+
+  // Create a contigious chunked buffer to represent the filtered chunks,
+  // taking ownership the buffer's data.
+  ChunkedBuffer *const chunked_buffer = new ChunkedBuffer();
+  RETURN_NOT_OK_ELSE(
+    Tile::buffer_to_contigious_var_chunks(
+      buffer.data(), std::move(var_chunk_sizes), chunked_buffer),
+    delete chunked_buffer);
+  buffer.disown_data();
+
+  std::cerr << "JOE about to init tile " << std::endl;
+
+  // Instantiate a new tile with the chunked buffer. The tile will take
+  // ownership of the buffer.
+  assert(tile);
+  *tile = new Tile(
+    header.version_number,
+    (Datatype)header.datatype,
+    header.cell_size,
+    0,
+    chunked_buffer,
+    true);
+
+  std::cerr << "JOE tile initialized: " << *tile << std::endl;
 
   // Filter
   RETURN_NOT_OK_ELSE(header.filters.run_reverse(*tile), delete *tile);
@@ -198,12 +251,23 @@ Status TileIO::write_generic(
   GenericTileHeader header;
   RETURN_NOT_OK(init_generic_tile_header(tile, &header, encryption_key));
 
+  std::cerr << "JOE write_generic size before filter: " << tile->chunked_buffer()->size() << std::endl;
+
   // Filter tile
   RETURN_NOT_OK(header.filters.run_forward(tile));
-  header.persisted_size = tile->buffer()->size();
+  header.persisted_size = tile->size();
 
   RETURN_NOT_OK(write_generic_tile_header(&header));
-  RETURN_NOT_OK(storage_manager_->write(uri_, tile->buffer()));
+
+  // Write the number of chunks.
+  uint64_t nchunks = static_cast<uint64_t>(tile->chunked_buffer()->nchunks());
+  RETURN_NOT_OK(storage_manager_->write(uri_, &nchunks, sizeof(uint64_t)));
+
+  // Write the filtered tile buffer. The chunked buffer is always contigious
+  // after invoking 'run_forward'.
+  void *tile_buffer;
+  RETURN_NOT_OK(tile->chunked_buffer()->get_contigious(&tile_buffer));
+  RETURN_NOT_OK(storage_manager_->write(uri_, tile_buffer, tile->chunked_buffer()->size()));
 
   file_size_ = header.persisted_size;
   STATS_COUNTER_ADD(tileio_write_num_bytes_written, header.persisted_size);

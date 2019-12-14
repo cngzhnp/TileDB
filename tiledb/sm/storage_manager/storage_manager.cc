@@ -302,6 +302,8 @@ Status StorageManager::array_open_for_writes(
     ArraySchema** array_schema) {
   STATS_FUNC_IN(sm_array_open_for_writes);
 
+  std::cerr << "JOE array_open_for_writes 1" << std::endl;
+
   if (!vfs_->supports_uri_scheme(array_uri))
     return LOG_STATUS(Status::StorageManagerError(
         "Cannot open array; URI scheme unsupported."));
@@ -315,6 +317,8 @@ Status StorageManager::array_open_for_writes(
   }
 
   auto open_array = (OpenArray*)nullptr;
+
+  std::cerr << "JOE array_open_for_writes 2" << std::endl;
 
   // Lock mutex
   {
@@ -337,17 +341,23 @@ Status StorageManager::array_open_for_writes(
     open_array->cnt_incr();
   }
 
+  std::cerr << "JOE array_open_for_writes 3" << std::endl;
+
   // No shared filelock needed to be acquired
 
   // Load array schema if not fetched already
   if (open_array->array_schema() == nullptr) {
+    std::cerr << "JOE array_open_for_writes 3.1" << std::endl;
     auto st = load_array_schema(array_uri, open_array, encryption_key);
+    std::cerr << "JOE array_open_for_writes 3.2" << std::endl;
     if (!st.ok()) {
       open_array->mtx_unlock();
       array_close_for_writes(array_uri, encryption_key, nullptr);
       return st;
     }
   }
+
+  std::cerr << "JOE array_open_for_writes 4" << std::endl;
 
   // This library should not be able to write to newer-versioned arrays
   // (but it is ok to write to older arrays)
@@ -361,6 +371,8 @@ Status StorageManager::array_open_for_writes(
     array_close_for_writes(array_uri, encryption_key, nullptr);
     return LOG_STATUS(Status::StorageManagerError(err.str()));
   }
+
+  std::cerr << "JOE array_open_for_writes 5" << std::endl;
 
   // No fragment metadata to be loaded
 
@@ -517,6 +529,8 @@ Status StorageManager::array_create(
     const URI& array_uri,
     ArraySchema* array_schema,
     const EncryptionKey& encryption_key) {
+  std::cerr << "JOE StorageManager::array_create 1 " << std::endl;
+
   // Check array schema
   if (array_schema == nullptr) {
     return LOG_STATUS(
@@ -531,6 +545,8 @@ Status StorageManager::array_create(
         std::string("Cannot create array; Array '") + array_uri.c_str() +
         "' already exists"));
 
+  std::cerr << "JOE StorageManager::array_create 2 " << std::endl;
+
   std::lock_guard<std::mutex> lock{object_create_mtx_};
   array_schema->set_array_uri(array_uri);
   RETURN_NOT_OK(array_schema->check());
@@ -538,10 +554,14 @@ Status StorageManager::array_create(
   // Create array directory
   RETURN_NOT_OK(vfs_->create_dir(array_uri));
 
+   std::cerr << "JOE StorageManager::array_create 2.1: " << array_uri.to_string() << std::endl;
+
   // Create array metadata directory
   URI array_metadata_uri =
       array_uri.join_path(constants::array_metadata_folder_name);
   RETURN_NOT_OK(vfs_->create_dir(array_metadata_uri));
+
+  std::cerr << "JOE StorageManager::array_create 3: " << array_metadata_uri.to_string() << std::endl;
 
   // Store array schema
   Status st = store_array_schema(array_schema, encryption_key);
@@ -550,6 +570,8 @@ Status StorageManager::array_create(
     return st;
   }
 
+  std::cerr << "JOE StorageManager::array_create 4 " << std::endl;
+
   // Create array and array metadata filelocks
   URI array_filelock_uri = array_uri.join_path(constants::filelock_name);
   st = vfs_->touch(array_filelock_uri);
@@ -557,6 +579,8 @@ Status StorageManager::array_create(
     vfs_->remove_dir(array_uri);
     return st;
   }
+
+  std::cerr << "JOE StorageManager::array_create 5 " << std::endl;
 
   return Status::Ok();
 }
@@ -1084,14 +1108,12 @@ Status StorageManager::load_array_schema(
 
   URI schema_uri = array_uri.join_path(constants::array_schema_filename);
 
-  auto tile_io = new TileIO(this, schema_uri);
-  auto tile = (Tile*)nullptr;
-  RETURN_NOT_OK_ELSE(
-      tile_io->read_generic(&tile, 0, encryption_key), delete tile_io);
+  TileIO tile_io(this, schema_uri);
+  Tile *tile = nullptr;
+  RETURN_NOT_OK(tile_io.read_generic(&tile, 0, encryption_key));
   tile->disown_buff();
-  auto buff = tile->buffer();
+  auto buff = tile->buffer2();
   delete tile;
-  delete tile_io;
 
   // Deserialize
   auto cbuff = new ConstBuffer(buff);
@@ -1303,6 +1325,7 @@ Status StorageManager::object_iter_next_preorder(
 }
 
 Status StorageManager::query_submit(Query* query) {
+  std::cerr << "JOE StorageManager::query_submit 1" << std::endl;
   STATS_COUNTER_ADD_IF(
       query->type() == QueryType::READ, sm_query_submit_read, 1);
   STATS_COUNTER_ADD_IF(
@@ -1327,6 +1350,7 @@ Status StorageManager::query_submit(Query* query) {
 
   // Process the query
   QueryInProgress in_progress(this);
+  std::cerr << "JOE StorageManager::query_submit 2" << std::endl;
   auto st = query->process();
 
   return st;
@@ -1368,6 +1392,12 @@ Status StorageManager::read(
   return Status::Ok();
 }
 
+Status StorageManager::read(
+    const URI& uri, uint64_t offset, void* buffer, uint64_t nbytes) const {
+  RETURN_NOT_OK(vfs_->read(uri, offset, buffer, nbytes));
+  return Status::Ok();
+}
+
 ThreadPool* StorageManager::reader_thread_pool() {
   return &reader_thread_pool_;
 }
@@ -1385,38 +1415,48 @@ Status StorageManager::set_tag(
 
 Status StorageManager::store_array_schema(
     ArraySchema* array_schema, const EncryptionKey& encryption_key) {
+  std::cerr << "JOE StorageManager::store_array_schema 1 " << std::endl;
+
   auto& array_uri = array_schema->array_uri();
   URI schema_uri = array_uri.join_path(constants::array_schema_filename);
-  ;
 
   // Serialize
-  auto buff = new Buffer();
-  RETURN_NOT_OK_ELSE(array_schema->serialize(buff), delete buff);
+  Buffer buff;
+  RETURN_NOT_OK(array_schema->serialize(&buff));
+
+  std::cerr << "JOE StorageManager::store_array_schema 2: " << std::string((char*)buff.data(), buff.size()) << std::endl;
 
   // Delete file if it exists already
   bool exists;
   RETURN_NOT_OK(is_file(schema_uri, &exists));
   if (exists)
-    RETURN_NOT_OK_ELSE(vfs_->remove_file(schema_uri), delete buff);
+    RETURN_NOT_OK(vfs_->remove_file(schema_uri));
+
+  std::cerr << "JOE StorageManager::store_array_schema 2.1 " << std::endl;
+
+  ChunkedBuffer chunked_buffer;
+  RETURN_NOT_OK(
+    Tile::buffer_to_contigious_fixed_chunks(
+      buff, 0, constants::generic_tile_cell_size, &chunked_buffer));
+  buff.disown_data();
 
   // Write to file
-  buff->reset_offset();
-  auto tile = new Tile(
+  Tile tile(
       constants::generic_tile_datatype,
       constants::generic_tile_cell_size,
       0,
-      buff,
+      &chunked_buffer,
       false);
-  auto tile_io = new TileIO(this, schema_uri);
+  std::cerr << "JOE StorageManager::store_array_schema 3 " << std::endl;
+  TileIO tile_io(this, schema_uri);
   uint64_t nbytes;
-  Status st = tile_io->write_generic(tile, encryption_key, &nbytes);
+  Status st = tile_io.write_generic(&tile, encryption_key, &nbytes);
   (void)nbytes;
   if (st.ok())
     st = close_file(schema_uri);
+  std::cerr << "JOE StorageManager::store_array_schema 4 " << std::endl;
 
-  delete tile;
-  delete tile_io;
-  delete buff;
+  chunked_buffer.free();
 
   return st;
 }
@@ -1707,7 +1747,7 @@ Status StorageManager::load_array_metadata(
       auto tile = (Tile*)nullptr;
       RETURN_NOT_OK(tile_io.read_generic(&tile, 0, encryption_key));
       tile->disown_buff();
-      auto buff = tile->buffer();
+      Buffer* buff = new Buffer(*tile->buffer2());
       delete tile;
       metadata_buff = std::make_shared<ConstBuffer>(buff);
       open_array->insert_array_metadata(uri, metadata_buff);

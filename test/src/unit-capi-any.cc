@@ -51,10 +51,14 @@ struct AnyFx {
 
 // Create a simple dense 1D array
 void AnyFx::create_array(const std::string& array_name) {
+  std::cerr << "JOE AnyFx::create_array 1 " << std::endl;
+
   // Create TileDB context
   tiledb_ctx_t* ctx;
   int rc = tiledb_ctx_alloc(NULL, &ctx);
   REQUIRE(rc == TILEDB_OK);
+
+  std::cerr << "JOE AnyFx::create_array 2 " << std::endl;
 
   // Create dimensions
   uint64_t dim_domain[] = {1, 4};
@@ -64,6 +68,8 @@ void AnyFx::create_array(const std::string& array_name) {
       ctx, "d1", TILEDB_UINT64, &dim_domain[0], &tile_extent, &d1);
   REQUIRE(rc == TILEDB_OK);
 
+  std::cerr << "JOE AnyFx::create_array 3 " << std::endl;
+
   // Create domain
   tiledb_domain_t* domain;
   rc = tiledb_domain_alloc(ctx, &domain);
@@ -71,14 +77,20 @@ void AnyFx::create_array(const std::string& array_name) {
   rc = tiledb_domain_add_dimension(ctx, domain, d1);
   REQUIRE(rc == TILEDB_OK);
 
+  std::cerr << "JOE AnyFx::create_array 4 " << std::endl;
+
   // Create attribute with datatype `ANY`
   tiledb_attribute_t* a1;
   rc = tiledb_attribute_alloc(ctx, "a1", TILEDB_ANY, &a1);
   REQUIRE(rc == TILEDB_OK);
 
+  std::cerr << "JOE AnyFx::create_array 5 " << std::endl;
+
   // The following is an error - `ANY` datatype is always variable-sized
   rc = tiledb_attribute_set_cell_val_num(ctx, a1, 2);
   REQUIRE(rc == TILEDB_ERR);
+
+  std::cerr << "JOE AnyFx::create_array 6 " << std::endl;
 
   // Create array schema
   tiledb_array_schema_t* array_schema;
@@ -93,13 +105,19 @@ void AnyFx::create_array(const std::string& array_name) {
   rc = tiledb_array_schema_add_attribute(ctx, array_schema, a1);
   REQUIRE(rc == TILEDB_OK);
 
+  std::cerr << "JOE AnyFx::create_array 7 " << std::endl;
+
   // Check array schema
   rc = tiledb_array_schema_check(ctx, array_schema);
   REQUIRE(rc == TILEDB_OK);
 
+  std::cerr << "JOE AnyFx::create_array 8 " << std::endl;
+
   // Create array
   rc = tiledb_array_create(ctx, array_name.c_str(), array_schema);
   REQUIRE(rc == TILEDB_OK);
+
+  std::cerr << "JOE AnyFx::create_array 9 " << std::endl;
 
   // Clean up
   tiledb_attribute_free(&a1);
@@ -120,7 +138,7 @@ void AnyFx::write_array(const std::string& array_name) {
   rc = tiledb_array_alloc(ctx, array_name.c_str(), &array);
   CHECK(rc == TILEDB_OK);
   rc = tiledb_array_open(ctx, array, TILEDB_WRITE);
-  CHECK(rc == TILEDB_OK);
+  REQUIRE(rc == TILEDB_OK);
 
   // Prepare buffers
   uint64_t buffer_a1_offsets[4];

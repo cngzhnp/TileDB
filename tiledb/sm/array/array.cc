@@ -130,6 +130,7 @@ Status Array::open(
     EncryptionType encryption_type,
     const void* encryption_key,
     uint32_t key_length) {
+
   std::unique_lock<std::mutex> lck(mtx_);
 
   if (is_open_)
@@ -235,6 +236,7 @@ Status Array::open(
     EncryptionType encryption_type,
     const void* encryption_key,
     uint32_t key_length) {
+  std::cerr << "JOE Array::open 1" << std::endl;
   std::unique_lock<std::mutex> lck(mtx_);
 
   if (is_open_)
@@ -244,6 +246,8 @@ Status Array::open(
   if (remote_ && encryption_type != EncryptionType::NO_ENCRYPTION)
     return LOG_STATUS(Status::ArrayError(
         "Cannot open array; encrypted remote arrays are not supported."));
+
+  std::cerr << "JOE Array::open 2" << std::endl;
 
   // Copy the key bytes.
   RETURN_NOT_OK(
@@ -270,8 +274,10 @@ Status Array::open(
         &fragment_metadata_,
         &metadata_));
   } else {
+    std::cerr << "JOE Array::open 4" << std::endl;
     RETURN_NOT_OK(storage_manager_->array_open_for_writes(
         array_uri_, encryption_key_, &array_schema_));
+    std::cerr << "JOE Array::open 5" << std::endl;
     metadata_.reset();  // Resets metadata with a new timestamp
   }
 

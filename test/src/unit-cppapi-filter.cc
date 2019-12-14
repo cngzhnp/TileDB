@@ -127,6 +127,7 @@ TEST_CASE("C++ API: Filter lists", "[cppapi], [filter]") {
 }
 
 TEST_CASE("C++ API: Filter lists on array", "[cppapi], [filter]") {
+  std::cerr << "JOE 3" << std::endl;
   using namespace tiledb;
   Context ctx;
   VFS vfs(ctx);
